@@ -1,0 +1,46 @@
+version: 2
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+brews:
+  - url_template: "https://github.com/vahid-haghighat/tfbox/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    download_strategy: CurlDownloadStrategy
+    commit_author:
+      name: tfbox release bot
+      email: bot@goreleaser.com
+    homepage: "https://github.com/vahid-haghighat/tfbox"
+    description: "Another terraform version selector, combined with docker"
+    license: "MIT"
+    test: system "#{bin}/tfbox --version"
+    install: bin.install "tfbox"
+    repository:
+      owner: brewdex
+      name: homebrew-tfbox
+      branch: main
+      token: "{{ .Env.BREWDEX_GITHUB_TOKEN }}"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
