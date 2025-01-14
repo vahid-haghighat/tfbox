@@ -1,6 +1,7 @@
 version: 2
 before:
   hooks:
+    - ./scripts/update_version.sh
     - go mod tidy
     - go generate ./...
 builds:
@@ -31,7 +32,7 @@ brews:
     homepage: "https://github.com/vahid-haghighat/tfbox"
     description: "Another terraform version selector, combined with docker"
     license: "MIT"
-    test: system "#{bin}/tfbox --version"
+    test: system "#{bin}/tfbox version"
     install: bin.install "tfbox"
     repository:
       owner: brewdex
