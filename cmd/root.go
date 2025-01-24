@@ -7,21 +7,23 @@ import (
 	"os"
 )
 
-var workingDirectory string
-var tfVersion string
-var rootDirectory string
-
 var rootCmd = &cobra.Command{
-	Use:   "tfbox",
-	Short: "Runs terraform inside docker",
-	Long:  `"Runs terraform inside docker"`,
+	Use:                "tfbox",
+	Short:              "Runs terraform inside docker",
+	Long:               `"Runs terraform inside docker"`,
+	DisableFlagParsing: true,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		initialize()
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		tfArgs := cmd.Flags().Args()
+		tfArgs := parsArgs(args)
 
 		if len(tfArgs) == 0 {
 			return fmt.Errorf("you need to pass terraform commands/flags")
 		}
-		return internal.Run(rootDirectory, workingDirectory, tfVersion, tfArgs)
+
+		return internal.Run(flags["root"].Variable, flags["directory"].Variable, flags["version"].Variable, tfArgs)
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		return nil
@@ -36,7 +38,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&rootDirectory, "root", "r", "", "The root of the project")
-	rootCmd.Flags().StringVarP(&workingDirectory, "directory", "d", ".", "Terraform working directory relative to root directory")
-	rootCmd.Flags().StringVarP(&tfVersion, "version", "v", "", "Terraform version to use")
+	for _, flag := range flags {
+		rootCmd.Flags().StringVarP(&flag.Variable, flag.Name, flag.Shorthand, flag.Default, flag.Usage)
+	}
 }
