@@ -144,32 +144,30 @@ func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string, sho
 	done := make(chan error)
 	outputDone := make(chan error)
 
-	if showLogs {
-		go func() {
-			out, err := cli.ContainerLogs(ctx, containerResp.ID, container.LogsOptions{
-				ShowStdout: true,
-				ShowStderr: true,
-				Follow:     true,
-			})
+	go func() {
+		out, err := cli.ContainerLogs(ctx, containerResp.ID, container.LogsOptions{
+			ShowStdout: true,
+			ShowStderr: true,
+			Follow:     true,
+		})
+		if err != nil {
+			outputDone <- fmt.Errorf("error fetching container logs: %w", err)
+			return
+		}
+		defer func(out io.ReadCloser) {
+			err = out.Close()
 			if err != nil {
-				outputDone <- fmt.Errorf("error fetching container logs: %w", err)
-				return
+				log.Println(err)
 			}
-			defer func(out io.ReadCloser) {
-				err = out.Close()
-				if err != nil {
-					log.Println(err)
-				}
-			}(out)
+		}(out)
 
+		if !showLogs {
+			_, err = stdcopy.StdCopy(io.Discard, io.Discard, out)
+		} else {
 			_, err = stdcopy.StdCopy(os.Stdout, os.Stderr, out)
-			outputDone <- err // Can be nil if successful or an error if failed
-		}()
-	} else {
-		go func() {
-			outputDone <- nil
-		}()
-	}
+		}
+		outputDone <- err // Can be nil if successful or an error if failed
+	}()
 
 	go func() {
 		statusCh, errCh := cli.ContainerWait(ctx, containerResp.ID, container.WaitConditionNotRunning)
