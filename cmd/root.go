@@ -23,7 +23,7 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("you need to pass terraform commands/flags")
 		}
 
-		return internal.Run(flags["root"].Variable, flags["directory"].Variable, flags["version"].Variable, tfArgs)
+		return internal.Run(flags["root"].Variable, flags["directory"].Variable, flags["version"].Variable, tfArgs, true)
 	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		return nil

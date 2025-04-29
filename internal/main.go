@@ -35,7 +35,7 @@ func init() {
 	terraformLinuxBinariesPath = filepath.Join(home, ".tfbox", "linux")
 }
 
-func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string) error {
+func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string, showLogs bool) error {
 	ctx := context.Background()
 
 	if rootDirectory == "" {
@@ -83,7 +83,7 @@ func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string) err
 	}
 
 	if !imageAvailable {
-		err = pullImage(ctx, cli, imageName)
+		err = pullImage(ctx, cli, imageName, showLogs)
 		if err != nil {
 			return err
 		}
@@ -144,26 +144,32 @@ func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string) err
 	done := make(chan error)
 	outputDone := make(chan error)
 
-	go func() {
-		out, err := cli.ContainerLogs(ctx, containerResp.ID, container.LogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Follow:     true,
-		})
-		if err != nil {
-			outputDone <- fmt.Errorf("error fetching container logs: %w", err)
-			return
-		}
-		defer func(out io.ReadCloser) {
-			err = out.Close()
+	if showLogs {
+		go func() {
+			out, err := cli.ContainerLogs(ctx, containerResp.ID, container.LogsOptions{
+				ShowStdout: true,
+				ShowStderr: true,
+				Follow:     true,
+			})
 			if err != nil {
-				log.Println(err)
+				outputDone <- fmt.Errorf("error fetching container logs: %w", err)
+				return
 			}
-		}(out)
+			defer func(out io.ReadCloser) {
+				err = out.Close()
+				if err != nil {
+					log.Println(err)
+				}
+			}(out)
 
-		_, err = stdcopy.StdCopy(os.Stdout, os.Stderr, out)
-		outputDone <- err // Can be nil if successful or an error if failed
-	}()
+			_, err = stdcopy.StdCopy(os.Stdout, os.Stderr, out)
+			outputDone <- err // Can be nil if successful or an error if failed
+		}()
+	} else {
+		go func() {
+			outputDone <- nil
+		}()
+	}
 
 	go func() {
 		statusCh, errCh := cli.ContainerWait(ctx, containerResp.ID, container.WaitConditionNotRunning)
@@ -338,8 +344,10 @@ func getTfVersionBasedOnConstraint(constraint string) (string, error) {
 	return "", fmt.Errorf("couldn't find a matching version")
 }
 
-func pullImage(ctx context.Context, cli *client.Client, imageName string) error {
-	fmt.Printf("Image %s not found locally. Pulling from registry...\n", imageName)
+func pullImage(ctx context.Context, cli *client.Client, imageName string, showLogs bool) error {
+	if showLogs {
+		fmt.Printf("Image %s not found locally. Pulling from registry...\n", imageName)
+	}
 
 	reader, err := cli.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
@@ -375,10 +383,12 @@ func pullImage(ctx context.Context, cli *client.Client, imageName string) error 
 		}
 
 		var l string
-		if progress.ID != "" {
-			l = fmt.Sprintf("[Image %s] %s: %s", progress.ID, progress.Status, progress.Progress)
-		} else {
-			l = fmt.Sprintf("[Status] %s", progress.Status)
+		if showLogs {
+			if progress.ID != "" {
+				l = fmt.Sprintf("[Image %s] %s: %s", progress.ID, progress.Status, progress.Progress)
+			} else {
+				l = fmt.Sprintf("[Status] %s", progress.Status)
+			}
 		}
 
 		logBuffer = append(logBuffer, l)
@@ -386,10 +396,15 @@ func pullImage(ctx context.Context, cli *client.Client, imageName string) error 
 			logBuffer = logBuffer[1:]
 		}
 
-		dynamicLogPrint(logBuffer, maxLines)
+		if showLogs {
+			dynamicLogPrint(logBuffer, maxLines)
+		}
 	}
 
-	fmt.Printf("Pull completed: %s\n", imageName)
+	if showLogs {
+		fmt.Printf("Pull completed: %s\n", imageName)
+	}
+
 	return nil
 }
 
