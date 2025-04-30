@@ -123,6 +123,7 @@ func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string, sho
 			fmt.Sprintf("%s:/host", rootDirectory),
 			fmt.Sprintf("%s/.aws:/.aws", home),
 			fmt.Sprintf("%s:/usr/local/bin/%s", terraformBinaryPath, product.Terraform.BinaryName()),
+			fmt.Sprintf("%s/.netrc:/root/.netrc", home),
 		},
 	}
 
