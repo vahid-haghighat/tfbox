@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 var home string
@@ -141,9 +142,10 @@ func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string, sho
 		}
 	}()
 
-	done := make(chan error)
-	outputDone := make(chan error)
+	done := make(chan error, 1)       // Add buffer
+	outputDone := make(chan error, 1) // Add buffer
 
+	// Start the log processing goroutine
 	go func() {
 		out, err := cli.ContainerLogs(ctx, containerResp.ID, container.LogsOptions{
 			ShowStdout: true,
@@ -166,9 +168,10 @@ func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string, sho
 		} else {
 			_, err = stdcopy.StdCopy(os.Stdout, os.Stderr, out)
 		}
-		outputDone <- err // Can be nil if successful or an error if failed
+		outputDone <- err
 	}()
 
+	// Start the container wait goroutine
 	go func() {
 		statusCh, errCh := cli.ContainerWait(ctx, containerResp.ID, container.WaitConditionNotRunning)
 		select {
@@ -176,7 +179,6 @@ func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string, sho
 			if status.Error != nil {
 				done <- fmt.Errorf("container error: %s", status.Error.Message)
 			} else {
-				//fmt.Printf("Container exited with status: %d\n", status.StatusCode)
 				done <- nil
 			}
 		case err := <-errCh:
@@ -184,20 +186,28 @@ func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string, sho
 		}
 	}()
 
-	select {
-	case outputDoneErr := <-outputDone:
-		if outputDoneErr != nil {
-			//fmt.Printf("Error processing container logs: %s\n", outputDoneErr)
-		} else {
-			//fmt.Println("Finished processing container logs.")
-		}
-	case doneErr := <-done:
-		if doneErr != nil {
-			//fmt.Printf("Container wait failed: %s\n", doneErr)
-		}
-	}
+	// Wait for both goroutines to complete
+	var outputErr, waitErr error
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	return nil
+	go func() {
+		defer wg.Done()
+		outputErr = <-outputDone
+	}()
+
+	go func() {
+		defer wg.Done()
+		waitErr = <-done
+	}()
+
+	wg.Wait()
+
+	// Return the first non-nil error, or nil if both succeeded
+	if outputErr != nil {
+		return outputErr
+	}
+	return waitErr
 }
 
 func downloadTerraformBinary(ctx context.Context, tfVersion string) (string, error) {
