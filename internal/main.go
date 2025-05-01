@@ -101,6 +101,9 @@ func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string, sho
 	// Set/Overwrite custom environment variables
 	environmentVariablesMap["AWS_CONFIG_FILE"] = "/.aws/config"
 	environmentVariablesMap["AWS_SHARED_CREDENTIALS_FILE"] = "/.aws/credentials"
+	environmentVariablesMap["NETRC"] = "/.netrc"
+	environmentVariablesMap["HOME"] = "/"
+	environmentVariablesMap["GIT_TERMINAL_PROMPT"] = "0"
 	environmentVariablesMap["TMPDIR"] = "/tmp"
 
 	environmentVariableList := make([]string, 0, len(environmentVariablesMap))
@@ -123,7 +126,7 @@ func Run(rootDirectory, workingDirectory, tfVersion string, tfArgs []string, sho
 			fmt.Sprintf("%s:/host", rootDirectory),
 			fmt.Sprintf("%s/.aws:/.aws", home),
 			fmt.Sprintf("%s:/usr/local/bin/%s", terraformBinaryPath, product.Terraform.BinaryName()),
-			fmt.Sprintf("%s/.netrc:/root/.netrc", home),
+			fmt.Sprintf("%s/.netrc:/.netrc", home),
 		},
 	}
 
